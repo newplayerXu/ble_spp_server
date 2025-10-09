@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/CMakeFiles/bootloader"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/CMakeFiles/bootloader.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/CMakeFiles/bootloader-complete.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
+		},
+		{
+			"file" : "G:/Code/EspidfTasks/Try_temp/v1server/ble_spp_server/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"bootloader"
+		],
+		"name" : "bootloader"
+	}
+}

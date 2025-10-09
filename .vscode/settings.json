@@ -1,0 +1,28 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "f:\\ESP-IDF\\Espressif\\frameworks\\esp-idf-v5.4.1",
+  "idf.toolsPathWin": "F:\\ESP-IDF\\Espressif\\tools",
+  "idf.pythonInstallPath": "F:\\ESP-IDF\\Espressif\\tools\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ],
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3"
+  },
+  "clangd.path": "F:\\ESP-IDF\\Espressif\\tools\\tools\\esp-clang\\esp-18.1.2_20240912\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=F:\\ESP-IDF\\Espressif\\tools\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-gcc.exe",
+    "--compile-commands-dir=g:\\Code\\EspidfTasks\\Try_temp\\v1server\\ble_spp_server\\build"
+  ],
+  "files.associations": {
+    "*.inc": "c",
+    "esp_bt.h": "c",
+    "gpio.h": "c",
+    "esp_log.h": "c",
+    "esp_log_timestamp.h": "c",
+    "esp_system.h": "c",
+    "esp_gatt_common_api.h": "c"
+  },
+  "idf.portWin": "COM8"
+}
