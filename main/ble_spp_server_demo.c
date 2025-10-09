@@ -786,122 +786,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
         }
     } while (0);
 }
-
-void res_monitor_task(void *pvParameters)
-{
-    ESP_LOGI(GATTS_TABLE_TAG, "RES Monitor Task started");
-
-    for (;;)
-    {
-        // 每隔1.5秒输出一次接收到的数据
-        vTaskDelay(1500 / portTICK_PERIOD_MS);
-
-        // 检查是否有新数据
-        if (g_data_mutex != NULL && g_received_data.updated)
-        {
-            // 获取互斥锁
-            if (xSemaphoreTake(g_data_mutex, 0) == pdTRUE)
-            {
-                // 输出接收到的数据
-                if (g_received_data.data != NULL && g_received_data.len > 0)
-                {
-                    // ESP_LOGI(GATTS_TABLE_TAG, "Outputting received data:");
-                    for (int i = 0; i < g_received_data.len; i++)
-                    {
-                        putchar(g_received_data.data[i]);
-                    }
-                    // 可选：添加换行符
-                    // putchar('1\n');
-                    fflush(stdout);
-
-                    // 标记数据已处理
-                    g_received_data.updated = false;
-                }
-
-                // 释放互斥锁
-                xSemaphoreGive(g_data_mutex);
-            }
-        }
-    }
-}
-// 简化版本 - 只输出最新接收到的数据
-// void res_monitor_task(void *pvParameters)
-// {
-//     ESP_LOGI(GATTS_TABLE_TAG, "RES Monitor Task started");
-
-//     for (;;)
-//     {
-//         // 每隔1.5秒输出提示信息
-//         vTaskDelay(1500 / portTICK_PERIOD_MS);
-
-//         ESP_LOGI(GATTS_TABLE_TAG, "Monitor task running...");
-//         // 注意：这个简化版本不会输出实际接收到的数据
-//         // 因为在定时任务中无法访问ESP_GATTS_WRITE_EVT事件中的p_data
-//     }
-// }
-
-void app_main(void)
-{
-    esp_err_t ret;
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-
-    // Initialize NVS
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
-
-    ret = esp_bt_controller_init(&bt_cfg);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth", __func__);
-
-    ret = esp_bluedroid_init();
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-    ret = esp_bluedroid_enable();
-    if (ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    esp_ble_gatts_register_callback(gatts_event_handler);
-    esp_ble_gap_register_callback(gap_event_handler);
-    esp_ble_gatts_app_register(ESP_SPP_APP_ID);
-
-    spp_task_init();
-
-    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
-    if (local_mtu_ret)
-    {
-        ESP_LOGE(GATTS_TABLE_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
-    }
-
-    xTaskCreatePinnedToCore(res_monitor_task, "res_monitor", 4096, NULL, 5, NULL, 1);
-
-    return;
-}
-
 #include "driver/ledc.h"
 #include "driver/gpio.h"
 
@@ -1089,3 +973,123 @@ void motor_speed_lr(uint8_t lr, uint8_t motor, uint32_t speed, uint8_t dir)
 }
 
 // 添加定时输出任务函数
+
+void res_monitor_task(void *pvParameters)
+{
+    ESP_LOGI(GATTS_TABLE_TAG, "RES Monitor Task started");
+
+    for (;;)
+    {
+        // 每隔1.5秒输出一次接收到的数据
+        vTaskDelay(1500 / portTICK_PERIOD_MS);
+
+        // 检查是否有新数据
+        if (g_data_mutex != NULL && g_received_data.updated)
+        {
+            // 获取互斥锁
+            if (xSemaphoreTake(g_data_mutex, 0) == pdTRUE)
+            {
+                // 输出接收到的数据
+                if (g_received_data.data != NULL && g_received_data.len > 0)
+                {
+                    // ESP_LOGI(GATTS_TABLE_TAG, "Outputting received data:");
+                    if (g_received_data.data[0] == '1')
+                    {
+                        motor_speed_lr(1, 1, 8000, 1);
+                    }
+
+                    for (int i = 0; i < g_received_data.len; i++)
+                    {
+                        putchar(g_received_data.data[i]);
+                    }
+                    // 可选：添加换行符
+                    // putchar('1\n');
+                    fflush(stdout);
+
+                    // 标记数据已处理
+                    g_received_data.updated = false;
+                }
+
+                // 释放互斥锁
+                xSemaphoreGive(g_data_mutex);
+            }
+        }
+    }
+}
+// 简化版本 - 只输出最新接收到的数据
+// void res_monitor_task(void *pvParameters)
+// {
+//     ESP_LOGI(GATTS_TABLE_TAG, "RES Monitor Task started");
+
+//     for (;;)
+//     {
+//         // 每隔1.5秒输出提示信息
+//         vTaskDelay(1500 / portTICK_PERIOD_MS);
+
+//         ESP_LOGI(GATTS_TABLE_TAG, "Monitor task running...");
+//         // 注意：这个简化版本不会输出实际接收到的数据
+//         // 因为在定时任务中无法访问ESP_GATTS_WRITE_EVT事件中的p_data
+//     }
+// }
+
+void app_main(void)
+{
+    esp_err_t ret;
+    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+
+    // Initialize NVS
+    ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+
+    ret = esp_bt_controller_init(&bt_cfg);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+        return;
+    }
+
+    ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
+        return;
+    }
+
+    ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth", __func__);
+
+    ret = esp_bluedroid_init();
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
+        return;
+    }
+    ret = esp_bluedroid_enable();
+    if (ret)
+    {
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed: %s", __func__, esp_err_to_name(ret));
+        return;
+    }
+
+    esp_ble_gatts_register_callback(gatts_event_handler);
+    esp_ble_gap_register_callback(gap_event_handler);
+    esp_ble_gatts_app_register(ESP_SPP_APP_ID);
+
+    spp_task_init();
+
+    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
+    if (local_mtu_ret)
+    {
+        ESP_LOGE(GATTS_TABLE_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
+    }
+
+    xTaskCreatePinnedToCore(res_monitor_task, "res_monitor", 4096, NULL, 5, NULL, 1);
+
+    return;
+}
