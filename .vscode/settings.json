@@ -23,7 +23,10 @@
     "esp_log_timestamp.h": "c",
     "esp_system.h": "c",
     "esp_gatt_common_api.h": "c",
-    "random": "c"
+    "random": "c",
+    "sstream": "c",
+    "regex": "c",
+    "numbers": "c"
   },
   "idf.portWin": "COM8"
 }

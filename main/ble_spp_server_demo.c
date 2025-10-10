@@ -22,6 +22,197 @@
 #include "ble_spp_server_demo.h"
 #include "esp_gatt_common_api.h"
 
+/*--------------------------------------*/
+#include "driver/ledc.h"
+#include "driver/gpio.h"
+
+#define _1_PWMA GPIO_NUM_10
+#define _1_AIN2 GPIO_NUM_11
+#define _1_AIN1 GPIO_NUM_12
+#define _1_PWMB GPIO_NUM_3
+#define _1_BIN2 GPIO_NUM_46
+#define _1_BIN1 GPIO_NUM_9
+
+#define _2_PWMA GPIO_NUM_13
+#define _2_AIN2 GPIO_NUM_14
+#define _2_AIN1 GPIO_NUM_21
+#define _2_PWMB GPIO_NUM_45
+#define _2_BIN2 GPIO_NUM_48
+#define _2_BIN1 GPIO_NUM_47
+
+//------------------------------电机引脚配置------------------------------//
+void gpio_init(void)
+{
+    // gpio_set_direction(_1_PWMA, GPIO_MODE_OUTPUT);//配置左侧两电机为输出模式
+    // gpio_set_direction(_1_PWMB, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_1_AIN2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_1_AIN1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_1_BIN2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_1_BIN1, GPIO_MODE_OUTPUT);
+
+    // gpio_set_direction(_2_PWMA, GPIO_MODE_OUTPUT);//配置右侧两电机为输出模式
+    // gpio_set_direction(_2_PWMB, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_2_AIN2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_2_AIN1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_2_BIN2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(_2_BIN1, GPIO_MODE_OUTPUT);
+
+    //------------------------------配置定时器和通道------------------------------//
+    gpio_config_t motor_cfg = {
+        //.pin_bit_mask = (1ULL << _2A_LED_GPIO),
+        .pin_bit_mask = (1ULL << _1_PWMA) | (1ULL << _1_PWMB) |
+                        (1ULL << _2_PWMA) | (1ULL << _2_PWMB) |
+                        (1ULL << _1_AIN2) | (1ULL << _1_AIN1) |
+                        (1ULL << _1_BIN2) | (1ULL << _1_BIN1) |
+                        (1ULL << _2_AIN2) | (1ULL << _2_AIN1) |
+                        (1ULL << _2_BIN2) | (1ULL << _2_BIN1),
+
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&motor_cfg);
+
+    ledc_timer_config_t motor_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .timer_num = LEDC_TIMER_0,
+        .clk_cfg = LEDC_AUTO_CLK,
+        .freq_hz = 500,
+        .duty_resolution = LEDC_TIMER_13_BIT,
+
+    };
+    ledc_timer_config(&motor_timer);
+    // 配置4个独立的PWM通道
+    // 通道0: 左侧A电机
+    ledc_channel_config_t channel_0 = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .timer_sel = LEDC_TIMER_0,
+        .gpio_num = _1_PWMA,
+        .duty = 0,
+        .intr_type = LEDC_INTR_DISABLE,
+    };
+    ledc_channel_config(&channel_0);
+    // 通道1: 左侧B电机
+    ledc_channel_config_t channel_1 = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_1,
+        .timer_sel = LEDC_TIMER_0,
+        .gpio_num = _1_PWMB,
+        .duty = 0,
+        .intr_type = LEDC_INTR_DISABLE,
+    };
+    ledc_channel_config(&channel_1);
+
+    // 通道2: 右侧A电机
+    ledc_channel_config_t channel_2 = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_2,
+        .timer_sel = LEDC_TIMER_0,
+        .gpio_num = _2_PWMA,
+        .duty = 0,
+        .intr_type = LEDC_INTR_DISABLE,
+    };
+    ledc_channel_config(&channel_2);
+
+    // 通道3: 右侧B电机
+    ledc_channel_config_t channel_3 = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_3,
+        .timer_sel = LEDC_TIMER_0,
+        .gpio_num = _2_PWMB,
+        .duty = 0,
+        .intr_type = LEDC_INTR_DISABLE,
+    };
+    ledc_channel_config(&channel_3);
+
+    // ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 2192); // 25%初始占空比
+    // ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+
+    ledc_fade_func_install(0); // 开启硬件pwm
+}
+//------------------------------电机控制逻辑------------------------------//
+void motor_speed_lr(uint8_t lr, uint8_t motor, uint32_t speed, uint8_t dir)
+// lr:0-左侧，1-右侧 motor:
+// 1-A电机，2-B电机；
+// speed：0-8191
+// dir:0-正转，1-反转
+{
+    ledc_channel_t channel;
+
+    if (lr == 0)
+    { // 左侧
+        channel = (motor == 1) ? LEDC_CHANNEL_0 : LEDC_CHANNEL_1;
+    }
+    else
+    { // 右侧
+        channel = (motor == 1) ? LEDC_CHANNEL_2 : LEDC_CHANNEL_3;
+    }
+    if (lr == 0)
+    {
+        if (motor == 1)
+        {
+            if (dir == 0)
+            {
+                gpio_set_level(_1_AIN2, 1);
+                gpio_set_level(_1_AIN1, 0);
+            }
+            else
+            {
+                gpio_set_level(_1_AIN2, 0);
+                gpio_set_level(_1_AIN1, 1);
+            }
+        }
+        else if (motor == 2)
+        {
+            if (dir == 0)
+            {
+                gpio_set_level(_1_BIN2, 1);
+                gpio_set_level(_1_BIN1, 0);
+            }
+            else
+            {
+                gpio_set_level(_1_BIN2, 0);
+                gpio_set_level(_1_BIN1, 1);
+            }
+        }
+    }
+    else if (lr == 1)
+    {
+        if (motor == 1)
+        {
+            if (dir == 0)
+            {
+                gpio_set_level(_2_AIN2, 1);
+                gpio_set_level(_2_AIN1, 0);
+            }
+            else
+            {
+                gpio_set_level(_2_AIN2, 0);
+                gpio_set_level(_2_AIN1, 1);
+            }
+        }
+        else if (motor == 2)
+        {
+            if (dir == 0)
+            {
+                gpio_set_level(_2_BIN2, 1);
+                gpio_set_level(_2_BIN1, 0);
+            }
+            else
+            {
+                gpio_set_level(_2_BIN2, 0);
+                gpio_set_level(_2_BIN1, 1);
+            }
+        }
+    }
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, speed);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
+    // ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+}
+
 static struct
 {
     uint8_t *data;
@@ -33,7 +224,7 @@ static SemaphoreHandle_t g_data_mutex = NULL;
 // 用于速率限制的全局变量
 static uint32_t g_last_process_time = 0;
 
-#define GATTS_TABLE_TAG "GATTS_SPP_DEMO"
+#define GATTS_TABLE_TAG "怀谷"
 
 #define SPP_PROFILE_NUM 1
 #define SPP_PROFILE_APP_IDX 0
@@ -484,13 +675,34 @@ void spp_heartbeat_task(void *arg)
 void spp_cmd_task(void *arg)
 {
     uint8_t *cmd_id;
-
+    gpio_init();
     for (;;)
     {
         vTaskDelay(50 / portTICK_PERIOD_MS);
         if (xQueueReceive(cmd_cmd_queue, &cmd_id, portMAX_DELAY))
         {
             ESP_LOG_BUFFER_CHAR(GATTS_TABLE_TAG, (char *)(cmd_id), strlen((char *)cmd_id));
+            // if (strcmp((char *)cmd_id, "111") == 0)
+            {
+                esp_ble_gatts_send_indicate(spp_gatts_if, spp_conn_id, spp_handle_table[SPP_IDX_SPP_DATA_NTY_VAL], strlen((char *)cmd_id), (uint8_t *)cmd_id, false);
+                // if (strcmp((char *)cmd_id, "111") == 0)
+                //     gpio_set_level(GPIO_NUM_14, 1);
+                // if (strcmp((char *)cmd_id, "222") == 0)
+                //     gpio_set_level(GPIO_NUM_14, 0);
+                if (strcmp((char *)cmd_id, "111") == 0)
+                {
+                    motor_speed_lr(1, 1, 8000, 1);
+                }
+                else if (strcmp((char *)cmd_id, "222") == 0)
+                {
+                    motor_speed_lr(1, 1, 8000, 0);
+                }
+                else if (strcmp((char *)cmd_id, "333") == 0)
+                {
+                    motor_speed_lr(1, 1, 0, 1);
+                }
+                // motor_speed_lr(1, 1, 8000, 1);
+            }
             free(cmd_id);
         }
     }
@@ -507,7 +719,7 @@ static void spp_task_init(void)
 #endif
 
     cmd_cmd_queue = xQueueCreate(10, sizeof(uint32_t));
-    xTaskCreate(spp_cmd_task, "spp_cmd_task", 2048, NULL, 10, NULL);
+    xTaskCreate(spp_cmd_task, "spp_cmd_task", 4096, NULL, 10, NULL);
 }
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
@@ -786,191 +998,6 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
         }
     } while (0);
 }
-#include "driver/ledc.h"
-#include "driver/gpio.h"
-
-#define _1_PWMA GPIO_NUM_10
-#define _1_AIN2 GPIO_NUM_11
-#define _1_AIN1 GPIO_NUM_12
-#define _1_PWMB GPIO_NUM_3
-#define _1_BIN2 GPIO_NUM_46
-#define _1_BIN1 GPIO_NUM_9
-
-#define _2_PWMA GPIO_NUM_13
-#define _2_AIN2 GPIO_NUM_14
-#define _2_AIN1 GPIO_NUM_21
-#define _2_PWMB GPIO_NUM_45
-#define _2_BIN2 GPIO_NUM_48
-#define _2_BIN1 GPIO_NUM_47
-
-//------------------------------电机引脚配置------------------------------//
-void gpio_init(void)
-{
-    // gpio_set_direction(_1_PWMA, GPIO_MODE_OUTPUT);//配置左侧两电机为输出模式
-    // gpio_set_direction(_1_PWMB, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_1_AIN2, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_1_AIN1, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_1_BIN2, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_1_BIN1, GPIO_MODE_OUTPUT);
-
-    // gpio_set_direction(_2_PWMA, GPIO_MODE_OUTPUT);//配置右侧两电机为输出模式
-    // gpio_set_direction(_2_PWMB, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_2_AIN2, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_2_AIN1, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_2_BIN2, GPIO_MODE_OUTPUT);
-    gpio_set_direction(_2_BIN1, GPIO_MODE_OUTPUT);
-
-    //------------------------------配置定时器和通道------------------------------//
-    gpio_config_t motor_cfg = {
-        //.pin_bit_mask = (1ULL << _2A_LED_GPIO),
-        .pin_bit_mask = (1ULL << _1_PWMA) | (1ULL << _1_PWMB) |
-                        (1ULL << _2_PWMA) | (1ULL << _2_PWMB),
-
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .mode = GPIO_MODE_OUTPUT,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&motor_cfg);
-
-    ledc_timer_config_t motor_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0,
-        .clk_cfg = LEDC_AUTO_CLK,
-        .freq_hz = 5000,
-        .duty_resolution = LEDC_TIMER_13_BIT,
-
-    };
-    ledc_timer_config(&motor_timer);
-    // 配置4个独立的PWM通道
-    // 通道0: 左侧A电机
-    ledc_channel_config_t channel_0 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
-        .timer_sel = LEDC_TIMER_0,
-        .gpio_num = _1_PWMA,
-        .duty = 0,
-        .intr_type = LEDC_INTR_DISABLE,
-    };
-    ledc_channel_config(&channel_0);
-    // 通道1: 左侧B电机
-    ledc_channel_config_t channel_1 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_1,
-        .timer_sel = LEDC_TIMER_0,
-        .gpio_num = _1_PWMB,
-        .duty = 0,
-        .intr_type = LEDC_INTR_DISABLE,
-    };
-    ledc_channel_config(&channel_1);
-
-    // 通道2: 右侧A电机
-    ledc_channel_config_t channel_2 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_2,
-        .timer_sel = LEDC_TIMER_0,
-        .gpio_num = _2_PWMA,
-        .duty = 0,
-        .intr_type = LEDC_INTR_DISABLE,
-    };
-    ledc_channel_config(&channel_2);
-
-    // 通道3: 右侧B电机
-    ledc_channel_config_t channel_3 = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_3,
-        .timer_sel = LEDC_TIMER_0,
-        .gpio_num = _2_PWMB,
-        .duty = 0,
-        .intr_type = LEDC_INTR_DISABLE,
-    };
-    ledc_channel_config(&channel_3);
-
-    // ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 2192); // 25%初始占空比
-    // ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
-
-    ledc_fade_func_install(0); // 开启硬件pwm
-}
-//------------------------------电机控制逻辑------------------------------//
-void motor_speed_lr(uint8_t lr, uint8_t motor, uint32_t speed, uint8_t dir)
-// lr:0-左侧，1-右侧 motor:
-// 1-A电机，2-B电机；
-// speed：0-8191
-// dir:0-正转，1-反转
-{
-    ledc_channel_t channel;
-
-    if (lr == 0)
-    { // 左侧
-        channel = (motor == 1) ? LEDC_CHANNEL_0 : LEDC_CHANNEL_1;
-    }
-    else
-    { // 右侧
-        channel = (motor == 1) ? LEDC_CHANNEL_2 : LEDC_CHANNEL_3;
-    }
-    if (lr == 0)
-    {
-        if (motor == 1)
-        {
-            if (dir == 0)
-            {
-                gpio_set_level(_1_AIN2, 1);
-                gpio_set_level(_1_AIN1, 0);
-            }
-            else
-            {
-                gpio_set_level(_1_AIN2, 0);
-                gpio_set_level(_1_AIN1, 1);
-            }
-        }
-        else if (motor == 2)
-        {
-            if (dir == 0)
-            {
-                gpio_set_level(_1_BIN2, 1);
-                gpio_set_level(_1_BIN1, 0);
-            }
-            else
-            {
-                gpio_set_level(_1_BIN2, 0);
-                gpio_set_level(_1_BIN1, 1);
-            }
-        }
-    }
-    else if (lr == 1)
-    {
-        if (motor == 1)
-        {
-            if (dir == 0)
-            {
-                gpio_set_level(_2_AIN2, 1);
-                gpio_set_level(_2_AIN1, 0);
-            }
-            else
-            {
-                gpio_set_level(_2_AIN2, 0);
-                gpio_set_level(_2_AIN1, 1);
-            }
-        }
-        else if (motor == 2)
-        {
-            if (dir == 0)
-            {
-                gpio_set_level(_2_BIN2, 1);
-                gpio_set_level(_2_BIN1, 0);
-            }
-            else
-            {
-                gpio_set_level(_2_BIN2, 0);
-                gpio_set_level(_2_BIN1, 1);
-            }
-        }
-    }
-
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, speed);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
-    // ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
-}
 
 // 添加定时输出任务函数
 
@@ -993,18 +1020,18 @@ void res_monitor_task(void *pvParameters)
                 if (g_received_data.data != NULL && g_received_data.len > 0)
                 {
                     // ESP_LOGI(GATTS_TABLE_TAG, "Outputting received data:");
-                    if (g_received_data.data[0] == '1')
-                    {
-                        motor_speed_lr(1, 1, 8000, 1);
-                    }
+                    // if (g_received_data.data[0] == '1')
+                    // {
+                    //     motor_speed_lr(1, 1, 8000, 1);
+                    // }
 
-                    for (int i = 0; i < g_received_data.len; i++)
-                    {
-                        putchar(g_received_data.data[i]);
-                    }
-                    // 可选：添加换行符
-                    // putchar('1\n');
-                    fflush(stdout);
+                    // for (int i = 0; i < g_received_data.len; i++)
+                    // {
+                    //     putchar(g_received_data.data[i]);
+                    // }
+                    // // 可选：添加换行符
+                    // // putchar('1\n');
+                    // fflush(stdout);
 
                     // 标记数据已处理
                     g_received_data.updated = false;
