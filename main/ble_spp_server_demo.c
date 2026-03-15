@@ -21,6 +21,7 @@
 #include "esp_bt_device.h"
 #include "ble_spp_server_demo.h"
 #include "esp_gatt_common_api.h"
+#include "quiz.h"
 
 /*--------------------------------------*/
 #include "driver/ledc.h"
@@ -1063,6 +1064,18 @@ void app_main(void)
 {
     esp_err_t ret;
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
+
+    // Initialize Quiz Module
+    quiz_init();
+    
+    // Display quiz question
+    ESP_LOGI(GATTS_TABLE_TAG, "=== Educational Quiz ===");
+    quiz_print_question(0);
+    
+    // Demonstrate correct answer check
+    ESP_LOGI(GATTS_TABLE_TAG, "Checking answer B (毛泽东思想精髓):");
+    quiz_check_answer(0, 1);  // Answer B (index 1) is correct
+    ESP_LOGI(GATTS_TABLE_TAG, "=======================");
 
     // Initialize NVS
     ret = nvs_flash_init();
